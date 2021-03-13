@@ -8,10 +8,11 @@ import (
 	"github.com/kkucherenkov/kindle_quotes/pkg/quotes"
 )
 
-func main() {
-	file, err := os.Open("../My Clippings.txt")
+func ParseQuotes(filePath string) []quotes.KindleQuote {
+	file, err := os.Open(filePath)
 	if err != nil {
 		log.Fatal(err)
+		return nil
 	}
 
 	defer func() {
@@ -21,7 +22,7 @@ func main() {
 	}()
 
 	scanner := bufio.NewScanner(file)
-	var qs []*quotes.KindleQuote
+	var qs []quotes.KindleQuote
 	var line string
 	for scanner.Scan() {
 		quote := quotes.KindleQuote{}
@@ -37,10 +38,7 @@ func main() {
 		quote.Quote = line
 		scanner.Scan()
 		line = scanner.Text()
-		qs = append(qs, &quote)
+		qs = append(qs, quote)
 	}
-
-	for _, quote := range qs {
-		quote.String()
-	}
+	return qs
 }
