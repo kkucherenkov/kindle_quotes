@@ -26,6 +26,7 @@ DROP TABLE tbl_quotes;
 CREATE TABLE tbl_quotes (
     quote_id serial PRIMARY KEY,
     source_id INT NOT NULL,
+    quote VARCHAR(4096) NOT NULL,
     date_taken timestamp,
     FOREIGN KEY (source_id) REFERENCES tbl_sources (source_id)
 );
