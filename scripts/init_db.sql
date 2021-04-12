@@ -30,3 +30,22 @@ CREATE TABLE tbl_quotes (
     date_taken timestamp,
     FOREIGN KEY (source_id) REFERENCES tbl_sources (source_id)
 );
+
+
+create table tbl_users
+(
+	id bigserial,
+	username text not null,
+	password text not null
+);
+
+create unique index tbl_users_id_uindex
+	on tbl_users (id);
+
+create unique index tbl_users_username_uindex
+	on tbl_users (username);
+
+alter table tbl_users
+	add constraint tbl_users_pk
+		primary key (id);
+

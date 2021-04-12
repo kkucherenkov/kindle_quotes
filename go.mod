@@ -11,6 +11,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/shaj13/go-guardian/v2 v2.11.3
 	github.com/shaj13/libcache v1.0.0
-	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83 // indirect
+	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
 	golang.org/x/text v0.3.5 // indirect
 )

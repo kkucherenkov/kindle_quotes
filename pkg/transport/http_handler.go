@@ -1,7 +1,9 @@
 package transport
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
@@ -22,22 +24,13 @@ type HttpHandler interface {
 	GetAuthors() http.HandlerFunc
 	GetQuotesByAuthor() http.HandlerFunc
 	GetQuotesByTitle() http.HandlerFunc
-
 	Login() http.HandlerFunc
 	Registration() http.HandlerFunc
-
-	// GetQuotes(w http.ResponseWriter, r *http.Request)
-	// GetBooks(w http.ResponseWriter, r *http.Request)
-	// GetAuthors(w http.ResponseWriter, r *http.Request)
-	// GetQuotesByAuthor(w http.ResponseWriter, r *http.Request)
-	// GetQuotesByTitle(w http.ResponseWriter, r *http.Request)
-
-	// Login(w http.ResponseWriter, r *http.Request)
-	// Registration(w http.ResponseWriter, r *http.Request)
 }
 
 type KQHandler struct {
 	qRepository quotes.DBQuotesRepository
+	userDAO     users.UsersDAO
 	strategy    union.Union
 	keeper      jwt.SecretsKeeper
 }
@@ -57,11 +50,11 @@ func New(qr quotes.DBQuotesRepository, ur users.UsersDAO) HttpHandler {
 	basicStrategy := basic.NewCached(ur.ValidateUser, cache)
 	jwtStrategy := jwt.New(cache, keeper)
 	strategy := union.New(jwtStrategy, basicStrategy)
-	return KQHandler{qRepository: qr, keeper: keeper, strategy: strategy}
+	return KQHandler{qRepository: qr, keeper: keeper, strategy: strategy, userDAO: ur}
 }
 
 func (h KQHandler) GetQuotes() http.HandlerFunc {
-	return nil
+	return h.middleware(http.HandlerFunc(h.getQuotes))
 }
 func (h KQHandler) GetBooks() http.HandlerFunc {
 	return nil
@@ -90,8 +83,27 @@ func (h KQHandler) login(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(body))
 }
 
-func (h KQHandler) registration(w http.ResponseWriter, r *http.Request) {
+func (h KQHandler) getQuotes(w http.ResponseWriter, r *http.Request) {
+	body := fmt.Sprintf("status: %s \n", "It works")
+	w.Write([]byte(body))
+}
 
+func (h KQHandler) registration(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Error reading body: %v", err)
+		http.Error(w, "can't read body", http.StatusBadRequest)
+		return
+	}
+
+	data := map[string]string{}
+	json.Unmarshal(body, &data)
+	// fmt.Println(data)
+	auth, err := h.userDAO.CreateUser(r.Context(), r, data["username"], data["password"])
+
+	token, _ := jwt.IssueAccessToken(auth, h.keeper)
+	newBody := fmt.Sprintf("token: %s \n", token)
+	w.Write([]byte(newBody))
 }
 
 func (h KQHandler) middleware(next http.Handler) http.HandlerFunc {
