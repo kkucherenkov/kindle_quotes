@@ -1,14 +1,13 @@
 package transport
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/kkucherenkov/kindle_quotes/pkg/quotes"
+	"github.com/kkucherenkov/kindle_quotes/pkg/users"
 
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/basic"
@@ -38,13 +37,12 @@ type HttpHandler interface {
 }
 
 type KQHandler struct {
-	db          *pgxpool.Pool
-	qRepository *quotes.DBQuotesRepository
+	qRepository quotes.DBQuotesRepository
 	strategy    union.Union
 	keeper      jwt.SecretsKeeper
 }
 
-func New(d *pgxpool.Pool, repo *quotes.DBQuotesRepository) HttpHandler {
+func New(qr quotes.DBQuotesRepository, ur users.UsersDAO) HttpHandler {
 	keeper := jwt.StaticSecret{
 		ID:        "secret-id",
 		Secret:    []byte("secret"),
@@ -55,22 +53,35 @@ func New(d *pgxpool.Pool, repo *quotes.DBQuotesRepository) HttpHandler {
 	cache.RegisterOnExpired(func(key, _ interface{}) {
 		cache.Peek(key)
 	})
-	basicStrategy := basic.NewCached(validateUser, cache)
+
+	basicStrategy := basic.NewCached(ur.ValidateUser, cache)
 	jwtStrategy := jwt.New(cache, keeper)
 	strategy := union.New(jwtStrategy, basicStrategy)
-	return KQHandler{db: d, qRepository: repo, keeper: keeper, strategy: strategy}
+	return KQHandler{qRepository: qr, keeper: keeper, strategy: strategy}
 }
 
-func (h KQHandler) GetQuotes() http.HandlerFunc
-func (h KQHandler) GetBooks() http.HandlerFunc
-func (h KQHandler) GetAuthors() http.HandlerFunc
-func (h KQHandler) GetQuotesByAuthor() http.HandlerFunc
-func (h KQHandler) GetQuotesByTitle() http.HandlerFunc
+func (h KQHandler) GetQuotes() http.HandlerFunc {
+	return nil
+}
+func (h KQHandler) GetBooks() http.HandlerFunc {
+	return nil
+}
+func (h KQHandler) GetAuthors() http.HandlerFunc {
+	return nil
+}
+func (h KQHandler) GetQuotesByAuthor() http.HandlerFunc {
+	return nil
+}
+func (h KQHandler) GetQuotesByTitle() http.HandlerFunc {
+	return nil
+}
 
 func (h KQHandler) Login() http.HandlerFunc {
 	return h.middleware(http.HandlerFunc(h.login))
 }
-func (h KQHandler) Registration() http.HandlerFunc
+func (h KQHandler) Registration() http.HandlerFunc {
+	return http.HandlerFunc(h.registration)
+}
 
 func (h KQHandler) login(w http.ResponseWriter, r *http.Request) {
 	u := auth.User(r)
@@ -97,13 +108,4 @@ func (h KQHandler) middleware(next http.Handler) http.HandlerFunc {
 		r = auth.RequestWithUser(user, r)
 		next.ServeHTTP(w, r)
 	})
-}
-
-func validateUser(ctx context.Context, r *http.Request, userName, password string) (auth.Info, error) {
-	// here connect to db or any other service to fetch user and validate it.
-	if userName == "admin" && password == "admin" {
-		return auth.NewDefaultUser("admin", "1", nil, nil), nil
-	}
-
-	return nil, fmt.Errorf("Invalid credentials")
 }
