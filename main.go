@@ -22,20 +22,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	//qts := parser.ParseQuotes("../data/My Clippings.txt")
 	qRepo := quotes.CreateRepository(conn)
 	uRepo := users.NewUserRepository(conn)
 	//repo.ImportQuotes(qts)
 	// fmt.Println(qRepo)
 
-	hanlder := transport.New(qRepo, uRepo)
+	handler := transport.New(qRepo, uRepo)
 
 	defer conn.Close()
 
 	router := mux.NewRouter()
-	router.HandleFunc("/v1/auth/login", hanlder.Login()).Methods("POST")
-	router.HandleFunc("/v1/auth/register", hanlder.Registration()).Methods("POST")
-	router.HandleFunc("/v1/quotes", hanlder.GetQuotes()).Methods("GET")
+	router.HandleFunc("/v1/auth/login", handler.Login()).Methods("POST")
+	router.HandleFunc("/v1/auth/register", handler.Registration()).Methods("POST")
+	router.HandleFunc("/v1/quotes", handler.GetQuotes()).Methods("GET")
+	router.HandleFunc("/v1/upload", handler.UploadQuotes()).Methods("POST")
 	log.Println("server started and listening on http://127.0.0.1:8080")
 	err = http.ListenAndServe("127.0.0.1:8080", router)
 	fmt.Println(err)

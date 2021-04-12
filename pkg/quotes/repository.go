@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/shaj13/go-guardian/v2/auth"
 )
 
 type QuotesRepository interface {
@@ -17,7 +18,7 @@ type QuotesRepository interface {
 
 type DBQuotesRepository interface {
 	// QuotesRepository
-	ImportQuotes(quotes []KindleQuote)
+	ImportQuotes(ctx context.Context, quotes []KindleQuote)
 }
 
 type DBRepository struct {
@@ -30,99 +31,100 @@ func CreateRepository(database *pgxpool.Pool) DBQuotesRepository {
 	return repo
 }
 
-func (qr DBRepository) ImportQuotes(quotes []KindleQuote) {
+func (qr DBRepository) ImportQuotes(ctx context.Context, quotes []KindleQuote) {
+	user_id := auth.UserFromCtx(ctx).GetID()
 
 	sqlInsertAuthor := `
-INSERT INTO tbl_authors (author_name)
-VALUES ($1)
+INSERT INTO tbl_authors (author_name, user_id)
+VALUES ($1, $2)
 ON CONFLICT DO NOTHING
 	`
 	sqlSelectAuthor := `
-SELECT author_id FROM tbl_authors  WHERE author_name = $1
+SELECT author_id FROM tbl_authors  WHERE author_name = $1 AND user_id = $2
 	`
 	sqlInsertBook := `
-INSERT INTO tbl_sources (source_title, author_id)
-VALUES ($1, $2)
+INSERT INTO tbl_sources (source_title, author_id, user_id)
+VALUES ($1, $2, $3)
 ON CONFLICT DO NOTHING
 `
 	sqlSelectBook := `
-SELECT source_id FROM tbl_sources  WHERE source_title = $1
+SELECT source_id FROM tbl_sources  WHERE source_title = $1 AND user_id = $2
 	`
 
 	sqlInsertQuote := `
-INSERT INTO tbl_quotes (source_id, quote, date_taken)
-VALUES ($1, $2, $3)
+INSERT INTO tbl_quotes (source_id, quote, date_taken, user_id)
+VALUES ($1, $2, $3, $4)
 	`
 
 	for i, quote := range quotes {
 		auth_id := -1
 		source_id := -1
-		conn, err := qr.db.Acquire(context.Background())
+		conn, err := qr.db.Acquire(ctx)
 		if err != nil {
 			fmt.Println("can't acuire connection")
 			return
 		}
-		tr, err := conn.Begin(context.Background())
-		rr, err := tr.Query(context.Background(), sqlInsertAuthor, quote.Author)
+		tr, err := conn.Begin(ctx)
+		rr, err := tr.Query(ctx, sqlInsertAuthor, quote.Author, user_id)
 		if err != nil {
 			fmt.Println("transaction error", err)
 			return
 		}
 		rr.Close()
-		tr.Commit(context.Background())
+		tr.Commit(ctx)
 		conn.Release()
 		// time.Sleep(1 * time.Second)
-		conn, err = qr.db.Acquire(context.Background())
+		conn, err = qr.db.Acquire(ctx)
 		if err != nil {
 			fmt.Println("can't acuire connection")
 			return
 		}
-		err = conn.QueryRow(context.Background(), sqlSelectAuthor, quote.Author).Scan(&auth_id)
+		err = conn.QueryRow(ctx, sqlSelectAuthor, quote.Author, user_id).Scan(&auth_id)
 		if err != nil {
 			fmt.Println("Error in authors")
 			return
 		}
 		conn.Release()
 
-		conn, err = qr.db.Acquire(context.Background())
+		conn, err = qr.db.Acquire(ctx)
 		if err != nil {
 			fmt.Println("can't acuire connection")
 			return
 		}
-		tr, err = conn.Begin(context.Background())
-		rr, err = tr.Query(context.Background(), sqlInsertBook, quote.Title, auth_id)
+		tr, err = conn.Begin(ctx)
+		rr, err = tr.Query(ctx, sqlInsertBook, quote.Title, auth_id, user_id)
 		if err != nil {
 			fmt.Println("transaction error", err)
 			return
 		}
 		rr.Close()
-		tr.Commit(context.Background())
+		tr.Commit(ctx)
 		conn.Release()
 		// time.Sleep(1 * time.Second)
-		conn, err = qr.db.Acquire(context.Background())
+		conn, err = qr.db.Acquire(ctx)
 		if err != nil {
 			fmt.Println("can't acuire connection")
 			return
 		}
-		err = conn.QueryRow(context.Background(), sqlSelectBook, quote.Title).Scan(&source_id)
+		err = conn.QueryRow(ctx, sqlSelectBook, quote.Title, user_id).Scan(&source_id)
 		if err != nil {
 			fmt.Println("error in sources")
 			return
 		}
 		conn.Release()
-		conn, err = qr.db.Acquire(context.Background())
+		conn, err = qr.db.Acquire(ctx)
 		if err != nil {
 			fmt.Println("can't acuire connection")
 			return
 		}
-		tr, err = conn.Begin(context.Background())
-		rr, err = tr.Query(context.Background(), sqlInsertQuote, source_id, quote.Quote, time.Now())
+		tr, err = conn.Begin(ctx)
+		rr, err = tr.Query(ctx, sqlInsertQuote, source_id, quote.Quote, time.Now(), user_id)
 		if err != nil {
 			fmt.Println("transaction error", err)
 			return
 		}
 		rr.Close()
-		tr.Commit(context.Background())
+		tr.Commit(ctx)
 		conn.Release()
 		// time.Sleep(1 * time.Second)
 

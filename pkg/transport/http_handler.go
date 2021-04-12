@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kkucherenkov/kindle_quotes/pkg/parser"
 	"github.com/kkucherenkov/kindle_quotes/pkg/quotes"
 	"github.com/kkucherenkov/kindle_quotes/pkg/users"
 
@@ -24,6 +25,9 @@ type HttpHandler interface {
 	GetAuthors() http.HandlerFunc
 	GetQuotesByAuthor() http.HandlerFunc
 	GetQuotesByTitle() http.HandlerFunc
+
+	UploadQuotes() http.HandlerFunc
+
 	Login() http.HandlerFunc
 	Registration() http.HandlerFunc
 }
@@ -69,6 +73,10 @@ func (h KQHandler) GetQuotesByTitle() http.HandlerFunc {
 	return nil
 }
 
+func (h KQHandler) UploadQuotes() http.HandlerFunc {
+	return h.middleware(http.HandlerFunc(h.uploadQuotes))
+}
+
 func (h KQHandler) Login() http.HandlerFunc {
 	return h.middleware(http.HandlerFunc(h.login))
 }
@@ -86,6 +94,19 @@ func (h KQHandler) login(w http.ResponseWriter, r *http.Request) {
 func (h KQHandler) getQuotes(w http.ResponseWriter, r *http.Request) {
 	body := fmt.Sprintf("status: %s \n", "It works")
 	w.Write([]byte(body))
+}
+
+func (h KQHandler) uploadQuotes(w http.ResponseWriter, r *http.Request) {
+	file, fileHeader, err := r.FormFile("fileupload")
+	if err != nil {
+		w.Write([]byte(err.Error()))
+	}
+	defer file.Close()
+	fmt.Println(fileHeader.Size)
+	qts := parser.ParseQuotes(file)
+	h.qRepository.ImportQuotes(r.Context(), qts)
+
+	w.Write([]byte(fmt.Sprintf("imported %d quotes", len(qts))))
 }
 
 func (h KQHandler) registration(w http.ResponseWriter, r *http.Request) {

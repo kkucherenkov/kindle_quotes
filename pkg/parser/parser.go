@@ -2,25 +2,12 @@ package parser
 
 import (
 	"bufio"
-	"log"
-	"os"
+	"io"
 
 	"github.com/kkucherenkov/kindle_quotes/pkg/quotes"
 )
 
-func ParseQuotes(filePath string) []quotes.KindleQuote {
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Fatal(err)
-		return nil
-	}
-
-	defer func() {
-		if err = file.Close(); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
+func ParseQuotes(file io.Reader) []quotes.KindleQuote {
 	scanner := bufio.NewScanner(file)
 	var qs []quotes.KindleQuote
 	var line string

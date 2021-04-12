@@ -11,23 +11,32 @@ CREATE DATABASE kindle_quotes
        CONNECTION LIMIT = -1;
 
 DROP TABLE tbl_authors;
+DROP TABLE tbl_sources;
+DROP TABLE tbl_quotes;
+
 CREATE TABLE  tbl_authors (
+    user_id BIGINT NOT NULL,
     author_id serial PRIMARY KEY,
+    FOREIGN KEY (user_id) REFERENCES tbl_users (id),
     author_name VARCHAR(256) UNIQUE NOT NULL
 );
-DROP TABLE tbl_sources;
+
 CREATE TABLE  tbl_sources (
     source_id serial PRIMARY KEY,
     source_title VARCHAR(256) UNIQUE NOT NULL,
     author_id INT not null,
+    user_id BIGINT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES tbl_users (id),
     FOREIGN KEY (author_id) REFERENCES tbl_authors (author_id)
 );
-DROP TABLE tbl_quotes;
+
 CREATE TABLE tbl_quotes (
     quote_id serial PRIMARY KEY,
     source_id INT NOT NULL,
     quote VARCHAR(4096) NOT NULL,
     date_taken timestamp,
+    user_id BIGINT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES tbl_users (id),
     FOREIGN KEY (source_id) REFERENCES tbl_sources (source_id)
 );
 
