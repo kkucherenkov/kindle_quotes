@@ -16,6 +16,7 @@ type QuotesRepository interface {
 }
 
 type DBQuotesRepository interface {
+	// QuotesRepository
 	ImportQuotes(quotes []KindleQuote)
 }
 
