@@ -10,15 +10,17 @@ import (
 )
 
 type QuotesRepository interface {
-	GetBooks() []string
-	GetAuthors() []string
-	GetQuotesByAuthor(book string) []KindleQuote
-	GetQuotesByTitle(author string) []KindleQuote
+	// GetQuotes() []KindleQuote
+	// GetBooks() []string
+	// GetAuthors() []string
+	// GetQuotesByAuthor(book string) []KindleQuote
+	// GetQuotesByTitle(author string) []KindleQuote
 }
 
 type DBQuotesRepository interface {
-	// QuotesRepository
-	ImportQuotes(ctx context.Context, quotes []KindleQuote)
+	QuotesRepository
+	GetQuotes(ctx context.Context) ([]KindleQuote, error)
+	ImportQuotes(ctx context.Context, quotes []KindleQuote) (int, error)
 }
 
 type DBRepository struct {
@@ -31,7 +33,40 @@ func CreateRepository(database *pgxpool.Pool) DBQuotesRepository {
 	return repo
 }
 
-func (qr DBRepository) ImportQuotes(ctx context.Context, quotes []KindleQuote) {
+func (qr DBRepository) GetQuotes(ctx context.Context) ([]KindleQuote, error) {
+	user_id := auth.UserFromCtx(ctx).GetID()
+	sqlGetQuotes := `
+select tbl_authors.author_name, tbl_sources.source_title,tbl_quotes.quote, tbl_quotes.date_taken 
+from tbl_quotes 
+INNER JOIN tbl_sources ON tbl_sources.source_id = tbl_quotes.source_id 
+INNER JOIN tbl_authors ON tbl_authors.author_id = tbl_sources.author_id 
+where tbl_quotes.user_id=$1 
+`
+	quotes := []KindleQuote{}
+	conn, err := qr.db.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := conn.Query(ctx, sqlGetQuotes, user_id)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		quote := KindleQuote{}
+		t := time.Now()
+		err = rows.Scan(&quote.Author, &quote.Title, &quote.Quote, &t)
+		quote.Date = t.String()
+		if err != nil {
+			return nil, err
+		}
+		quotes = append(quotes, quote)
+	}
+	defer conn.Release()
+	return quotes, nil
+}
+
+func (qr DBRepository) ImportQuotes(ctx context.Context, quotes []KindleQuote) (int, error) {
 	user_id := auth.UserFromCtx(ctx).GetID()
 
 	sqlInsertAuthor := `
@@ -56,19 +91,18 @@ INSERT INTO tbl_quotes (source_id, quote, date_taken, user_id)
 VALUES ($1, $2, $3, $4)
 	`
 
-	for i, quote := range quotes {
+	for _, quote := range quotes {
 		auth_id := -1
 		source_id := -1
 		conn, err := qr.db.Acquire(ctx)
 		if err != nil {
-			fmt.Println("can't acuire connection")
-			return
+			return 0, fmt.Errorf("can't acuire connection")
 		}
 		tr, err := conn.Begin(ctx)
 		rr, err := tr.Query(ctx, sqlInsertAuthor, quote.Author, user_id)
 		if err != nil {
-			fmt.Println("transaction error", err)
-			return
+
+			return 0, err
 		}
 		rr.Close()
 		tr.Commit(ctx)
@@ -76,61 +110,49 @@ VALUES ($1, $2, $3, $4)
 		// time.Sleep(1 * time.Second)
 		conn, err = qr.db.Acquire(ctx)
 		if err != nil {
-			fmt.Println("can't acuire connection")
-			return
+			return 0, err
 		}
 		err = conn.QueryRow(ctx, sqlSelectAuthor, quote.Author, user_id).Scan(&auth_id)
 		if err != nil {
-			fmt.Println("Error in authors")
-			return
+			return 0, err
 		}
 		conn.Release()
 
 		conn, err = qr.db.Acquire(ctx)
 		if err != nil {
-			fmt.Println("can't acuire connection")
-			return
+			return 0, err
 		}
 		tr, err = conn.Begin(ctx)
 		rr, err = tr.Query(ctx, sqlInsertBook, quote.Title, auth_id, user_id)
 		if err != nil {
-			fmt.Println("transaction error", err)
-			return
+			return 0, err
 		}
 		rr.Close()
 		tr.Commit(ctx)
 		conn.Release()
-		// time.Sleep(1 * time.Second)
 		conn, err = qr.db.Acquire(ctx)
 		if err != nil {
-			fmt.Println("can't acuire connection")
-			return
+			return 0, err
 		}
 		err = conn.QueryRow(ctx, sqlSelectBook, quote.Title, user_id).Scan(&source_id)
 		if err != nil {
-			fmt.Println("error in sources")
-			return
+			return 0, err
 		}
 		conn.Release()
 		conn, err = qr.db.Acquire(ctx)
 		if err != nil {
-			fmt.Println("can't acuire connection")
-			return
+			return 0, err
 		}
 		tr, err = conn.Begin(ctx)
 		rr, err = tr.Query(ctx, sqlInsertQuote, source_id, quote.Quote, time.Now(), user_id)
 		if err != nil {
-			fmt.Println("transaction error", err)
-			return
+			return 0, err
 		}
 		rr.Close()
 		tr.Commit(ctx)
 		conn.Release()
-		// time.Sleep(1 * time.Second)
-
-		fmt.Println(fmt.Sprint(i+1) + " quote inserted")
 	}
-
+	return len(quotes), nil
 }
 
 type InmemRepo struct {

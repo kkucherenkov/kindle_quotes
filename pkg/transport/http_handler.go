@@ -92,8 +92,21 @@ func (h KQHandler) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h KQHandler) getQuotes(w http.ResponseWriter, r *http.Request) {
-	body := fmt.Sprintf("status: %s \n", "It works")
-	w.Write([]byte(body))
+	quotes, err := h.qRepository.GetQuotes(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+	} else {
+		w.WriteHeader(http.StatusOK)
+		w.Header().Add("Content-Type", "application/json")
+		data, err := json.Marshal(quotes)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+		} else {
+			w.Write(data)
+		}
+	}
 }
 
 func (h KQHandler) uploadQuotes(w http.ResponseWriter, r *http.Request) {
@@ -104,9 +117,14 @@ func (h KQHandler) uploadQuotes(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	fmt.Println(fileHeader.Size)
 	qts := parser.ParseQuotes(file)
-	h.qRepository.ImportQuotes(r.Context(), qts)
-
-	w.Write([]byte(fmt.Sprintf("imported %d quotes", len(qts))))
+	imported, err := h.qRepository.ImportQuotes(r.Context(), qts)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+	} else {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("imported %d quotes", imported)))
+	}
 }
 
 func (h KQHandler) registration(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +137,6 @@ func (h KQHandler) registration(w http.ResponseWriter, r *http.Request) {
 
 	data := map[string]string{}
 	json.Unmarshal(body, &data)
-	// fmt.Println(data)
 	auth, err := h.userDAO.CreateUser(r.Context(), r, data["username"], data["password"])
 
 	token, _ := jwt.IssueAccessToken(auth, h.keeper)
@@ -129,7 +146,6 @@ func (h KQHandler) registration(w http.ResponseWriter, r *http.Request) {
 
 func (h KQHandler) middleware(next http.Handler) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Executing Auth Middleware")
 		_, user, err := h.strategy.AuthenticateRequest(r)
 		if err != nil {
 			fmt.Println(err)
@@ -137,7 +153,6 @@ func (h KQHandler) middleware(next http.Handler) http.HandlerFunc {
 			http.Error(w, http.StatusText(code), code)
 			return
 		}
-		log.Printf("User %s Authenticated\n", user.GetUserName())
 		r = auth.RequestWithUser(user, r)
 		next.ServeHTTP(w, r)
 	})

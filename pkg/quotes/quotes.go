@@ -6,11 +6,10 @@ import (
 )
 
 type KindleQuote struct {
-	Title  string
-	Author string
-	Date   string
-	Quote  string
-	Type   string
+	Title  string `db:"source_title"`
+	Author string `db:"author_name"`
+	Date   string `db:"date_taken"`
+	Quote  string `db:"quote"`
 }
 
 func (quote *KindleQuote) ParseTitleAndAuthor(titleLine string) {
